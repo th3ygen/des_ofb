@@ -59,6 +59,42 @@ string byteToHex(vector<int> byte) {
     return res;
 }
 
+vector<vector<int>> hexToBin(string hex) {
+    vector<vector<int>> p;
+
+    // parse hex
+    vector<int> byte;
+    vector<int> block;
+    int byteCount = 0;
+    for (char h : hex) {
+        if (h != ' ') {
+            for (int x : numToBit(hexToInt(h), 4, true)) {
+                byte.push_back(x);
+            }
+        } else {
+            for (int x : byte) {
+                block.push_back(x);
+            }
+            byte.clear();
+
+            byteCount++;
+        }
+        if (byteCount >= 8) {
+            p.push_back(block);
+            block.clear();
+
+            byteCount = 0;
+        }
+        
+    }
+    for (int x : byte) {
+        block.push_back(x);
+    }
+    p.push_back(block);
+
+    return p;
+}
+
 vector<int> charToBit(char c, int size, bool pad, bool cap) {
     int n = int(c);
 
@@ -206,6 +242,13 @@ void print(std::vector<int> const &input)
 	for (int i = 0; i < input.size(); i++) {
 		std::cout << input.at(i);
 	}
+}
+
+void printline(int count, char line) {
+    for (int x = 0; x < count; x++) {
+        cout << line;
+    }
+    cout << "\n";
 }
 
 /******************************************************************************************
@@ -409,42 +452,6 @@ vector<vector<int>> ofb(vector<vector<int>> data, vector<int> iv, vector<int> ke
     return c;
 }
 
-vector<vector<int>> hexToBin(string hex) {
-    vector<vector<int>> p;
-
-    // parse hex
-    vector<int> byte;
-    vector<int> block;
-    int byteCount = 0;
-    for (char h : hex) {
-        if (h != ' ') {
-            for (int x : numToBit(hexToInt(h), 4, true)) {
-                byte.push_back(x);
-            }
-        } else {
-            for (int x : byte) {
-                block.push_back(x);
-            }
-            byte.clear();
-
-            byteCount++;
-        }
-        if (byteCount >= 8) {
-            p.push_back(block);
-            block.clear();
-
-            byteCount = 0;
-        }
-        
-    }
-    for (int x : byte) {
-        block.push_back(x);
-    }
-    p.push_back(block);
-
-    return p;
-}
-
 // OFB using string
 string ofb(string text, string iv, string key) {
     vector<vector<int>> textblocks, cipherblocks;
@@ -458,13 +465,6 @@ string ofb(string text, string iv, string key) {
     cipherblocks = ofb(textblocks, i, k);
 
     return bit64BlocksToStr(cipherblocks);
-}
-
-void printline(int count, char line) {
-    for (int x = 0; x < count; x++) {
-        cout << line;
-    }
-    cout << "\n";
 }
 
 int main() {
