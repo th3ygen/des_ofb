@@ -4,6 +4,7 @@
 #include <vector>
 #include <bitset>
 #include <bits/stdc++.h>
+#include <conio.h>
 
 #include "des_data_table.h"
 #include "des_key_table.h"
@@ -12,6 +13,7 @@ using namespace std;
 
 #define TOTAL_ROUND 16
 
+// helper functions
 int XOR(int a, int b) {
     if (a == b) {
         return 0;
@@ -27,8 +29,42 @@ vector<int> blockXOR(vector<int> a, vector<int> b) {
     return res;
 }
 
+char intToHex(int x) {
+    return ("0123456789ABCDEF")[x];
+}
+
+int hexToInt(char h) {
+    return string("0123456789ABCDEF").find(h);
+}
+
+string byteToHex(vector<int> byte) {
+    string res = "";
+    vector<vector<int>> d;
+
+    d.push_back(vector<int>(byte.begin(), byte.begin() + 4));
+    d.push_back(vector<int>(byte.begin() + 4, byte.end()));
+
+    int p = 4;
+    int j = 0;
+    for (vector<int> x : d) {
+        for (int y : x) {
+            j += pow(2, --p) * y;
+        }
+
+        res += intToHex(j);
+        p = 4;
+        j = 0;
+    }
+
+    return res;
+}
+
 vector<int> charToBit(char c, int size, bool pad, bool cap) {
     int n = int(c);
+
+    if (n < 0) {
+        n = 256 + n;
+    }
 
     vector<int> bits;
     
@@ -67,6 +103,17 @@ vector<int> numToBit(int n, int size, bool pad) {
     }
 
     return bits;
+}
+
+vector<char> strToVecASCII(string text) {
+    vector<char> res;
+
+    int x = 0;
+    for (char c : text) {
+        res.push_back(char(++x));
+    }
+
+    return res;
 }
 
 vector<int> strToBit(string str, int size, bool pad, bool cap) {
@@ -111,6 +158,16 @@ vector<vector<int>> strToBit64Blocks(string str, bool pad, bool cap) {
     return blocks;
 }
 
+char byteToChar(vector<int> bits) {
+    int p = 8;
+    int d = 0;
+    for (int x : bits) {
+        d += pow(2, --p) * x;
+    }
+
+    return char(d);
+}
+
 string bit64ToStr(vector<int> bits) {
     string res = "";
 
@@ -125,7 +182,8 @@ string bit64ToStr(vector<int> bits) {
         for (int y : x) {
             d += pow(2, p--) * y;
         }
-        res += char(d);
+        /* d %= 128; */
+        res += (char)d;
         d = 0;
         p = 7;
     }
@@ -150,6 +208,10 @@ void print(std::vector<int> const &input)
 	}
 }
 
+/******************************************************************************************
+ * DES
+ * 
+ ******************************************************************************************/
 vector<vector<int>> desKeygen(vector<int> key) {
     vector<vector<int>> result;
     vector<int> pc1, pc2;
@@ -323,7 +385,13 @@ vector<int> desDecrypt(vector<int> key, vector<int> data) {
     return desRun(subkeys, data);
 }
 
-vector<vector<int>> ofb(vector<int> iv, vector<vector<int>> data, vector<int> key) {
+/******************************************************************************************
+ * OFB
+ * 
+ ******************************************************************************************/
+
+// OFB using 2D vector
+vector<vector<int>> ofb(vector<vector<int>> data, vector<int> iv, vector<int> key) {
     vector<vector<int>> o; // output
     vector<vector<int>> c; // ciphertext
 
@@ -341,170 +409,91 @@ vector<vector<int>> ofb(vector<int> iv, vector<vector<int>> data, vector<int> ke
     return c;
 }
 
-string ofb(string iv, string text, string key) {
-    string res = "";
-    vector<int> k = strToBit(key, 64, true, true);
+vector<vector<int>> hexToBin(string hex) {
+    vector<vector<int>> p;
 
-    int size = text.size();
-    int l = 0;
+    // parse hex
+    vector<int> byte;
+    vector<int> block;
+    int byteCount = 0;
+    for (char h : hex) {
+        if (h != ' ') {
+            for (int x : numToBit(hexToInt(h), 4, true)) {
+                byte.push_back(x);
+            }
+        } else {
+            for (int x : byte) {
+                block.push_back(x);
+            }
+            byte.clear();
 
-    // get total group of 8char/64bit
-    int totalBlocks = ceil(float(size) / 8);
-    // split plain text into blocks of 64 bits
-    vector<vector<int>> textBlocks;
-    for (int x = 0; x < totalBlocks; x++) {
-        int s = 8;
-        if (x == totalBlocks - 1) {
-            s = size % 8;
+            byteCount++;
         }
+        if (byteCount >= 8) {
+            p.push_back(block);
+            block.clear();
 
-        textBlocks.push_back(strToBit(text.substr(x * 8, s), 64, true, false));
-    }
-
-    cout << "Plaintext: " << text << "\n";
-    for (int x = 0; x < totalBlocks; x++) {
-        int s = 8;
-        if (x == totalBlocks - 1) {
-            s = size % 8;
+            byteCount = 0;
         }
-
-        print(textBlocks.at(x));
-        cout << " <-> " << text.substr(x * 8, s) << "\n";
+        
     }
-
-    cout << "\n";
-
-    // get output for each round
-    // then XOR with plain text
-    vector<vector<int>> output;
-    
-    cout << "Initial vector\n";
-    for (int x : strToBit(iv, 64, true, true)) {
-        cout << x;
+    for (int x : byte) {
+        block.push_back(x);
     }
-    cout << "\n";
+    p.push_back(block);
 
-    /* cout << "\nResult\n";
+    return p;
+}
 
-    vector<int> tEncrypt = desEncrypt(k, strToBit(iv, 64, true, true));
+// OFB using string
+string ofb(string text, string iv, string key) {
+    vector<vector<int>> textblocks, cipherblocks;
+    vector<int> i, k;
 
-    cout << "Encrypted --- ";
-    print(tEncrypt);
-    cout << " <-> " << bit64ToStr(tEncrypt) << "\n";
+    k = strToBit(key, 64, true, true);
+    i = strToBit(iv, 64, true, true);
 
-    vector<int> decrypt = desDecrypt(k, tEncrypt);
+    textblocks = strToBit64Blocks(text, true, true);
 
-    cout << "Decrypted --- ";
-    print(decrypt);
-    cout << " <-> " << bit64ToStr(decrypt) << "\n"; */
+    cipherblocks = ofb(textblocks, i, k);
 
-    // initial vector
-    output.push_back(desEncrypt(k, strToBit(iv, 64, true, true)));
+    return bit64BlocksToStr(cipherblocks);
+}
 
-    for (int x = 0; x < totalBlocks - 1; x++) {
-        output.push_back(desEncrypt(k, output.back()));
-    }
-
-    cout << "OFB outputs\n";
-    for (vector<int> out : output) {
-        for (int o : out) {
-            cout << o;
-        }
-        cout << "\n";
+void printline(int count, char line) {
+    for (int x = 0; x < count; x++) {
+        cout << line;
     }
     cout << "\n";
-
-    // XOR with plaintext
-    vector<vector<int>> cipherBlocks;
-    vector<int> c;
-    for (int x = 0; x < totalBlocks; x++) {
-        for (int y = 0; y < 64; y++) {
-            c.push_back(XOR(textBlocks.at(x).at(y), output.at(x).at(y)));
-        }
-        cipherBlocks.push_back(c);
-
-        c.clear();
-    }
-
-    string cipherText = "";
-    for (vector<int> x : cipherBlocks) {
-        for (char y : bit64ToStr(x)) {
-            cipherText += y;
-        }
-    }
-
-    cout << "Ciphertext: " << cipherText << "\n";
-    for (int x = 0; x < totalBlocks; x++) {
-        print(cipherBlocks.at(x));
-        cout << " <-> " << bit64ToStr(cipherBlocks.at(x)) << "\n";
-    }
-
-    return cipherText;
 }
 
 int main() {
-    string message = "Aslam world! test DES";
+    string key;
+    string iv;
+
+    char mode = 0;
+    cout << "Select mode (0 - encryption, 1 - decryption): ";
+    cin >> mode;
     
+    if (mode != '0' && mode != '1') {
+        return 0;
+    }
 
-    /* cout << "Plaintext: " << message << "\n";
-    cout << "Key: " << key << "\n";
+    cout << "Insert key: ";
+    cin >> key;
 
-    cout << "Initial vector: " << iv << "\n";
-
-    cout << "\n"; */
-
-   /*  cout << "test DES \n";
-
-    cout << "Data      -> ";
-    vector<int> data = strToBit("HAXXOR69", 64, true, true);
-    print(data);
-    cout << " <-> HAXXOR69\n";
-
-    cout << "Key       -> ";
-    vector<int> k = strToBit("CRYPTO69", 64, true, true);
-    print(k);
-    cout << " <-> CRYPTO69\n";
-    
-    vector<int> testEnc = desEncrypt(k, data);
-    
-    cout << "Encrypted -> ";
-    print(testEnc);
-    cout << " <-> " << bit64ToStr(testEnc);
-    cout << "\n";
-
-    vector<int> testDec = desDecrypt(k, testEnc);
-    cout << "Decrypted -> ";
-    print(testDec);
-    cout << " <-> " << bit64ToStr(testDec);
-    cout << "\n"; */
-
-    /* // test key
-    string wrongKeys[6] = {"crypto69", "CRYPTO67", "CRYPTO68", "CRYPTO70", "ML24", ""};
-
-    vector<int> testErr;
-    int att = 0;
-    for (string wk : wrongKeys) {
-        cout << "\nAttempt #" << ++att << "\nUsing key: " << wk << "\n";
-
-        testErr = desDecrypt(strToBit(wk, 64, true, true), testEnc);
-
-        cout << "Decrypted -> ";
-        print(testDec);
-        cout << " <-> " << bit64ToStr(testErr);
-        cout << "\n";
-    } */
-    
-    /* string ciphertext = encrypt("0", message, key);
-    string plainttext = encrypt("0", ciphertext, key);
-
-    cout << "\n\n ciphertext -> " << ciphertext;
-    cout << "\n\n plaintext -> " << plainttext; */
-
-    string key = "del mode";
-    string iv = "crypto69";
+    cout << "Insert IV (any): ";
+    cin >> iv;
 
     string ciphertext;
-    string plaintext = "HAXXOR69";
+    string plaintext;
+
+    cout << "Insert text: ";
+    cin.ignore (std::numeric_limits<std::streamsize>::max(), '\n'); 
+    getline(cin, plaintext);
+
+    cout << "\n\n";
+    printline(100, '=');
 
     cout << "Plaintext: " << plaintext << "\n";
     cout << "Key: " << key << "\n";
@@ -517,21 +506,81 @@ int main() {
     k = strToBit(key, 64, true, true);
     i = strToBit(iv, 64, true, true);
 
-    textblocks = strToBit64Blocks(plaintext, true, true);
+    if (mode == '0') {
+        textblocks = strToBit64Blocks(plaintext, true, true);
+    } else {
+        textblocks = hexToBin(plaintext);
+    }
 
-    cipherblocks = ofb(i, textblocks, k);
+    cipherblocks = ofb(textblocks, i, k);
 
-    cout << plaintext << " <- plaintext\n";
-    cout << bit64BlocksToStr(cipherblocks) << " <- ciphertext\n";
+    ciphertext = bit64BlocksToStr(cipherblocks);
 
-    cout << "\nDecrypt cyphertext\n";
+    int bitCount = 0;
+    cout << "Result (by block)\n";
 
-    textblocks = ofb(i, cipherblocks, k);
+    printline(100, '=');
+    cout << "Binary:\n\n";
+    for (vector<int> b : cipherblocks) {
+        for (int x : b) {
+            cout << x;
 
-    cout << bit64BlocksToStr(textblocks) << " <- decrypted ciphertext\n";
+            bitCount++;
+            if (bitCount >= 4) {
+                cout << " ";
+                bitCount = 0;
+            }
+        }
+        cout << "\n";
+    }
+    printline(100, '=');
 
-    /* i = strToBit(iv, 64, true, true);
-    k = strToBit(key, 64, true, true); */
+    cout << "Hex:\n\n";
+    for (vector<int> b : cipherblocks) {
+        for (int x = 0; x < 8; x++) {
+            cout << byteToHex(vector<int>(b.begin() + (x * 8), b.begin() + (x * 8 + 8))) << " ";
+        }
+        cout << "\n";
+    }
+    printline(100, '=');
+
+    cout << "ASCII:\n\n";
+    for (vector<int> b : cipherblocks) {
+        for (int x = 0; x < 8; x++) {
+            cout << byteToChar(vector<int>(b.begin() + (x * 8), b.begin() + (x * 8 + 8))) << " ";
+        }
+        cout << "\n";
+    }
+    printline(100, '=');
+
+    cout << "\n\n";
+
+    if (mode == '0') {
+        cout << "\n\nCopy the following hex as plaintext for decryption\n";
+        string hex = "";
+        string h;
+        for (vector<int> b : cipherblocks) {
+            for (int x = 0; x < 8; x++) {
+                h = byteToHex(vector<int>(b.begin() + (x * 8), b.begin() + (x * 8 + 8)));
+                hex += h;
+                cout << h << " ";
+            }
+        }
+        cout << "\n\nYour key is: " << key;
+        cout << "\nYour initial vector is: " << iv << "\n\n";
+    }
+
+    if (mode == '1') {
+        cout << "Decrypted text: " << bit64BlocksToStr(cipherblocks) << "\n\n";
+    }
+
+    char exit;
+    cout << "Enter 0 to exit or enter any key to continue\n";
+    cin >> exit;
+
+    if (exit != '0') {
+        main();
+    }
 
     return 0;
 }
